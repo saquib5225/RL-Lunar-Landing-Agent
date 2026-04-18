@@ -6,27 +6,11 @@ def render():
 
     st.markdown("---")
 
-    st.markdown("### Team Members")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown("""
-        **Afaq Ahmad**
-        - Student ID: 20063247
-        """)
-
-    with col2:
-        st.markdown("""
-        **Saquib Zakir Husein Pirjade**
-        - Student ID: 20079780
-        """)
-
-    with col3:
-        st.markdown("""
-        **Habib Ullah**
-        - Student ID: 20073274
-        """)
+    st.markdown("### Team Member")
+    st.markdown("""
+    **Saquib Pirjade**
+    - Student ID: 20079780
+    """)
 
     st.markdown("---")
 
