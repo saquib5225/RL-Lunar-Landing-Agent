@@ -1,0 +1,15 @@
+{
+  "algorithm": "Double DQN",
+  "lr": 0.0005,
+  "gamma": 0.99,
+  "tau": 0.001,
+  "buffer_size": 100000,
+  "batch_size": 64,
+  "epsilon_start": 1.0,
+  "epsilon_end": 0.01,
+  "epsilon_decay": 0.995,
+  "update_every": 4,
+  "seed": 42,
+  "training_time_min": 7.02,
+  "total_episodes": 778
+}

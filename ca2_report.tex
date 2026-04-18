@@ -1,0 +1,249 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage[hidelinks]{hyperref}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage[table]{xcolor}
+\usepackage{parskip}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small B9AI105 -- Reinforcement Learning}
+\fancyhead[R]{\small CA2 Report}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.5em}{}
+
+\begin{document}
+
+% TITLE PAGE
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+
+{\huge\bfseries Deploying a Reinforcement Learning\\[0.3cm] Lunar Landing Agent\\[1.5cm]}
+
+{\Large CA2 Report -- Artifact Demonstration\\[0.5cm]}
+{\large Module: B9AI105 -- Reinforcement Learning\\[0.3cm]}
+{\large Programme: MSc Artificial Intelligence\\[0.3cm]}
+{\large Lecturer: Dr.\ Anesu Nyabadza\\[2cm]}
+
+\begin{tabular}{lc}
+\toprule
+\textbf{Team Member} & \textbf{Student Number} \\
+\midrule
+Afaq Ahmad & 20063247 \\
+Saquib Zakir Husein Pirjade & 20079780 \\
+Habib Ullah & 20073274 \\
+\bottomrule
+\end{tabular}
+
+\vfill
+{\large Dublin Business School\\[0.3cm]}
+{\large April 2026}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Introduction and Motivation}
+
+Autonomous landing of spacecraft is a sequential decision-making problem where an agent must select engine thrust actions over hundreds of time steps to land safely. Traditional control approaches such as PID controllers require hand-tuned parameters and struggle with nonlinear dynamics. Reinforcement learning offers an alternative: an agent interacts with the environment, receives reward signals, and learns an optimal policy through trial and error without requiring a pre-built model of the system dynamics.
+
+In CA1, we implemented three RL algorithms from scratch using PyTorch---Deep Q-Network (DQN), Double DQN, and Twin Delayed DDPG (TD3)---and trained them on the Gymnasium LunarLander environments. All three solved their respective environments, achieving average rewards exceeding 200 over 100 evaluation episodes.
+
+This CA2 report describes the deployment of those trained agents as an interactive web application built with Streamlit. The application allows a user to select an algorithm, run episodes visually, and observe the agent landing in real time. It also provides access to training results, and includes dedicated sections on ethics and limitations.
+
+% ============================================================
+\section{Reinforcement Learning Concepts}
+
+This section summarises the core RL concepts applied in our project, as covered in the module lectures.
+
+\subsection{Agent--Environment Interaction}
+
+RL operates through a cycle: the environment provides a state $s_t$ and reward $r_t$, the agent selects an action $a_t$, and the environment transitions to a new state $s_{t+1}$ with reward $r_{t+1}$. This interaction is modelled as a Markov Decision Process (MDP), defined by the tuple $(S, A, P, R)$ where $S$ is the state set, $A$ the action set, $P(s_{t+1} | s_t, a_t)$ the transition function, and $R(s_t, a_t, s_{t+1})$ the reward function. The Markov property states that the next state depends only on the current state and action, not the full history.
+
+\subsection{Return and Discount Factor}
+
+The agent's objective is to maximise the expected discounted return:
+\begin{equation}
+R(\tau) = \sum_{t=0}^{T} \gamma^t r_t
+\end{equation}
+where $\gamma \in [0,1]$ is the discount factor. A small $\gamma$ makes the agent short-sighted (valuing only immediate rewards), while a large $\gamma$ makes it far-sighted. In our project, $\gamma = 0.99$ was critical because the landing reward is delayed by hundreds of steps.
+
+\subsection{Q-Learning and the Bellman Equation}
+
+Q-learning is a model-free, off-policy algorithm that learns the optimal action-value function $Q(s,a)$ using the update rule:
+\begin{equation}
+Q(s,a) \leftarrow Q(s,a) + \alpha \left[ r + \gamma \max_{a'} Q(s', a') - Q(s,a) \right]
+\end{equation}
+where $\alpha$ is the learning rate. The term in brackets is the temporal difference (TD) error.
+
+\subsection{Exploration vs Exploitation}
+
+The agent must balance trying new actions (exploration) with using known good actions (exploitation). We used epsilon-greedy exploration for DQN/DDQN, where the agent selects a random action with probability $\epsilon$ and the greedy action with probability $1-\epsilon$. The value of $\epsilon$ decays from 1.0 to 0.01 over training, shifting from exploration to exploitation.
+
+\subsection{Deep Q-Network (DQN)}
+
+When the state space is continuous, a Q-table is infeasible. DQN replaces it with a neural network that takes the state as input and outputs Q-values for all actions. Two key innovations stabilise training: (1) an experience replay buffer that stores transitions and samples random mini-batches to break temporal correlation, and (2) a target network that is updated slowly to provide stable learning targets.
+
+\subsection{Double DQN}
+
+Standard DQN's use of the max operator causes systematic overestimation of Q-values. Double DQN decouples action selection from evaluation: the online network selects the best action $a^* = \arg\max_a Q_{\text{online}}(s', a)$, and the target network evaluates it $Q_{\text{target}}(s', a^*)$. This reduces the maximisation bias.
+
+\subsection{Actor--Critic and TD3}
+
+For continuous action spaces, value-based methods like DQN cannot enumerate all possible actions. Actor-critic methods use two networks: an actor that outputs actions and a critic that estimates Q-values. DDPG extends this with a deterministic policy, target networks, and a replay buffer. TD3 improves DDPG with three innovations: twin critics (take the minimum of two Q-estimates to prevent overestimation), delayed policy updates (update the actor less frequently than the critic), and target policy smoothing (add clipped noise to target actions).
+
+\subsection{Monte Carlo Methods}
+
+Monte Carlo methods estimate value functions by averaging returns from complete episodes. The return from state $s$ at time $t$ is:
+\begin{equation}
+G_t = r_{t+1} + \gamma r_{t+2} + \gamma^2 r_{t+3} + \cdots + \gamma^{T-t-1} r_T
+\end{equation}
+Unlike TD methods, MC does not bootstrap---it waits for the full episode to finish before updating. This avoids bias but requires episodic environments.
+
+% ============================================================
+\section{Deployment Methodology}
+
+\subsection{Application Architecture}
+
+The deployed application is a Streamlit web application that wraps the trained models from CA1. No retraining occurs---the models are frozen snapshots. The application consists of six pages accessible via sidebar navigation:
+
+\begin{enumerate}
+    \item \textbf{Home} -- overview of the problem, environment, and algorithms.
+    \item \textbf{Live Demo} -- interactive agent execution with visual rendering.
+    \item \textbf{Results \& Analysis} -- training curves, metrics, and sensitivity plots from CA1.
+    \item \textbf{Ethics} -- ethical considerations of deploying RL systems.
+    \item \textbf{Limitations} -- constraints of the solution.
+    \item \textbf{About} -- team information and technology stack.
+\end{enumerate}
+
+\subsection{Live Demo Implementation}
+
+The core technical challenge was rendering the Gymnasium environment inside a web browser. Gymnasium's default \texttt{render\_mode='human'} opens a native window, which is incompatible with web deployment. Our solution:
+
+\begin{enumerate}
+    \item Create the environment with \texttt{render\_mode='rgb\_array'}, which returns frames as NumPy arrays of shape $(400, 600, 3)$.
+    \item Run the full episode, collecting every frame and tracking the cumulative reward.
+    \item Compile the frames into an in-memory GIF using the Python Imaging Library (PIL).
+    \item Display the GIF in the browser using Streamlit's \texttt{st.image} function alongside real-time metrics (reward, steps, landing status).
+\end{enumerate}
+
+The user selects an algorithm (DQN, Double DQN, or TD3), clicks a button, and watches the agent land. A batch mode runs 10 episodes and reports aggregate statistics including mean reward and success rate.
+
+\subsection{Model Loading}
+
+Trained model weights are loaded from \texttt{.pth} checkpoint files saved during CA1 training. The DQN and Double DQN agents use the same \texttt{DQNAgent} class with a \texttt{double\_dqn} flag. The TD3 agent is loaded with \texttt{hidden\_dim=128} to match the training configuration. All models are cached using Streamlit's \texttt{@st.cache\_resource} decorator to avoid reloading on every interaction.
+
+\subsection{Technology Stack}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Technology} \\
+\midrule
+RL Environment & Gymnasium (LunarLander-v3) \\
+Deep Learning & PyTorch \\
+Web Application & Streamlit \\
+Language & Python 3.11 \\
+Visualisation & Matplotlib, PIL \\
+\bottomrule
+\end{tabular}
+\caption{Technology stack used in the deployment.}
+\end{table}
+
+% ============================================================
+\section{Results}
+
+The deployed application successfully runs all three trained agents. Table~\ref{tab:results} summarises the evaluation performance from CA1, which the deployed models replicate.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Algorithm} & \textbf{Solved (Episode)} & \textbf{Eval Mean} & \textbf{Success Rate} \\
+\midrule
+DQN & 692 & 196.88 & 69\% \\
+Double DQN & 681 & 195.18 & 67\% \\
+TD3 & 763 & 206.81 & 80\% \\
+\bottomrule
+\end{tabular}
+\caption{Performance of deployed models (from CA1 evaluation).}
+\label{tab:results}
+\end{table}
+
+Key observations from the deployed demo:
+\begin{itemize}
+    \item TD3 produces the smoothest landings due to continuous throttle control.
+    \item DQN/DDQN occasionally overshoot or wobble due to discrete engine firing.
+    \item All three agents successfully land in the majority of episodes.
+    \item The GIF rendering adds no measurable latency to inference---episodes complete in under 2 seconds.
+\end{itemize}
+
+% ============================================================
+\section{Ethics}
+
+Deploying RL in real-world systems raises ethical concerns that must be addressed. This section follows the four pillars of research ethics and the ML-specific ethical dimensions covered in the module.
+
+\subsection{Protection of Participants}
+
+In our project, no human participants are involved. However, if this technology were applied to real spacecraft or drones, the safety of people on the ground and onboard becomes a primary concern. RL agents trained through trial and error will fail many times during training. In simulation this is harmless; in reality, each failure could cause physical harm. Safety constraints must be hard-coded as fallbacks that override the learned policy in dangerous states.
+
+\subsection{Fairness and Bias}
+
+The reward function encodes human design choices. Our LunarLander reward penalises fuel usage ($-0.3$ per engine fire), encoding a preference for fuel efficiency. A different reward could prioritise landing speed or precision instead. Poorly designed rewards can lead to reward hacking, where the agent maximises reward without achieving the intended goal. The choice of what behaviour to reward is inherently a value judgement.
+
+\subsection{Transparency and Interpretability}
+
+Neural network policies are black boxes. When our DQN agent fires the main engine, we cannot easily explain why. For safety-critical deployment, regulators may require explainability, predictability, and formal verification---guarantees that current RL methods cannot provide. This must be communicated honestly when proposing RL for real-world use.
+
+\subsection{Social Responsibility and Dual Use}
+
+The RL techniques used in this project are general-purpose. The same algorithms that learn to land a spacecraft could be applied to autonomous weapons, surveillance, or manipulation. The research community has a responsibility to consider how published methods might be repurposed. Additionally, training RL agents consumes computational resources, contributing to energy use and carbon emissions.
+
+\subsection{Sim-to-Real Transfer}
+
+Our agent was trained in a 2D physics simulation with perfect sensors and deterministic dynamics. Real deployment would involve sensor noise, actuator lag, wind, and 3D dynamics. Deploying a simulation-trained policy without addressing this gap is ethically problematic because the system may appear validated but fail in conditions it was never exposed to.
+
+% ============================================================
+\section{Limitations}
+
+\subsection{Simulation vs Reality}
+
+The LunarLander environment is a significant simplification: 2D physics, perfect sensors, instant engine response, no wind, flat terrain. A policy trained here would not transfer to a real lander without domain randomisation, robust control, and hardware-in-the-loop testing.
+
+\subsection{Statistical Limitations}
+
+All experiments used a single random seed (42). Results may vary with different seeds. Proper evaluation would require multiple seeds with confidence intervals. The 100-episode evaluation may not capture rare failure modes.
+
+\subsection{No Safety Guarantees}
+
+The trained agents have no formal safety guarantees: no worst-case bounds, no formal verification, no constraint-based learning. The agent could behave unpredictably on states it never encountered during training.
+
+\subsection{Theory vs Deployed Solution}
+
+CA1 focused on algorithm correctness and training analysis in a research context. CA2 wraps the same frozen models in a web interface. No retraining occurs. The deployment adds a user interaction layer but the underlying algorithms are identical. Real-time rendering introduces minor latency not present during offline evaluation. The application runs locally and requires Python, PyTorch, and Gymnasium installed---it is not a cloud-deployed service.
+
+\subsection{Algorithm Scope}
+
+We implemented three algorithms. Many others exist (PPO, SAC, A3C, REINFORCE, model-based methods) that we did not explore. Our comparison is not exhaustive.
+
+% ============================================================
+\section{Conclusion}
+
+This project demonstrated the deployment of three from-scratch RL algorithms as an interactive web application. The Streamlit app allows users to select an algorithm, run episodes with visual rendering, and inspect training results. All three agents---DQN, Double DQN, and TD3---successfully land the spacecraft in the majority of episodes, with TD3 achieving the highest success rate of 80\%.
+
+The deployment highlighted important differences between theoretical solutions and real-world applications: the sim-to-real gap, the lack of safety guarantees, and the ethical implications of autonomous decision-making systems. Building both the algorithms and the deployment from scratch gave us a deeper understanding of RL as a methodology for complex sequential decision-making tasks.
+
+\end{document}

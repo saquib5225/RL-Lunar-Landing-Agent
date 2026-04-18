@@ -1,0 +1,13 @@
+.venv/
+.venv311/
+.uv-cache/
+__pycache__/
+*/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+cloudflared.exe
+cloudflared.out.log
+cloudflared.err.log
+streamlit.out.log
+streamlit.err.log
